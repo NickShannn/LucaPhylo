@@ -69,6 +69,13 @@ class LucaPhyloHyper(EsmPreTrainedModel):
         super().__init__(config)
         self.model_args = model_kwargs.get("model_args")
         pooler_type = getattr(self.model_args, "pooler_type", "avg")
+        self.loss_weighted_method = getattr(self.model_args, "loss_weighted_method", "ols")
+        self.loss_weight_eps = getattr(self.model_args, "loss_weight_eps", 1e-2)
+        if self.loss_weighted_method not in ("ols", "fm", "be"):
+            raise ValueError(
+                f"Unsupported loss_weighted_method `{self.loss_weighted_method}`; "
+                "expected one of: ols, fm, be."
+            )
 
         self.esm = EsmModel(config, add_pooling_layer=False)
         self.pooler = Pooler(pooler_type)
@@ -116,7 +123,16 @@ class LucaPhyloHyper(EsmPreTrainedModel):
         loss = None
         if labels is not None:
             labels = labels.to(distances.device, dtype=distances.dtype).view_as(distances)
-            loss = F.mse_loss(distances, labels)
+            if self.loss_weighted_method == "ols":
+                loss = F.mse_loss(distances, labels)
+            else:
+                ref = labels.clamp_min(self.loss_weight_eps)
+                if self.loss_weighted_method == "fm":
+                    weight = 1.0 / ref.pow(2)
+                else:
+                    weight = 1.0 / ref
+                weight = weight / weight.mean()
+                loss = ((distances - labels) ** 2 * weight).mean()
 
         return SequenceClassifierOutput(
             loss=loss,

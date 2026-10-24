@@ -51,6 +51,17 @@ class ModelArguments:
         default="query,key,value",
         metadata={"help": "Comma-separated ESM attention projections to adapt with LoRA."},
     )
+    loss_weighted_method: str = field(
+        default="ols",
+        metadata={
+            "help": "Distance regression loss weighting: ols = plain MSE; "
+            "fm = Fitch-Margoliash 1/D^2; be = Beyer 1/D (HDEPP, Biology 2022)."
+        },
+    )
+    loss_weight_eps: float = field(
+        default=1e-2,
+        metadata={"help": "Clamp floor on labels when computing loss weights; guards fp16 blow-up."},
+    )
 
 
 @dataclass
